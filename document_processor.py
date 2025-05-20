@@ -30,6 +30,7 @@ def chunk_text_by_word_count(text: str, target_chunk_words: int = 250, overlap_w
     Returns:
         A list of text chunks.
     """
+    
     words = text.split()
     if not words:
         return []

@@ -16,13 +16,6 @@ try:
         client = OpenAI(api_key=api_key)
         print("OpenAI client initialized successfully!")
         
-        # Optional: Make a simple test call (e.g., list models if your key has perms)
-        # try:
-        #     models = client.models.list()
-        #     print("Successfully listed models.")
-        #     # print(list(models))
-        # except Exception as e_call:
-        #     print(f"Error making test call to OpenAI: {e_call}")
 
 except Exception as e_init:
     print(f"ERROR initializing OpenAI client: {e_init}")

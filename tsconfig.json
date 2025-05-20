@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES5",
+    "module": "CommonJS",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "outDir": "static/js",
+    "sourceMap": true,
+    "downlevelIteration": true,
+    "lib": ["DOM", "ES5", "ScriptHost", "ES2015.Promise"]
+  },
+  "include": ["static/ts/**/*"]
+} 

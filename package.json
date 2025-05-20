@@ -1,0 +1,25 @@
+{
+  "name": "CarManual-LLM",
+  "version": "1.0.0",
+  "description": "A RAG (Retrieval-Augmented Generation) system for car manuals using FastAPI, ChromaDB, and OpenAI embeddings.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "node build-ts.js",
+    "watch": "node watch-ts.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chenchristian/CarManual-LLM.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/chenchristian/CarManual-LLM/issues"
+  },
+  "homepage": "https://github.com/chenchristian/CarManual-LLM#readme",
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  }
+}

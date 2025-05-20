@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Car Manual Assistant</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+</head>
+<body>
+    <header>
+        <h1>Car Manual Assistant</h1>
+        <p>Ask questions about your car manual and get concise answers</p>
+    </header>
+
+    <div class="container">
+        <div class="upload-section">
+            <h2><i class="fas fa-file-upload"></i> Upload a Car Manual</h2>
+            <form id="uploadForm">
+                <div class="file-input-container">
+                    <input type="file" id="pdfFile" accept=".pdf" class="hidden-file-input" required>
+                    <div class="custom-file-input">
+                        <span id="fileName">No file selected</span>
+                        <label for="pdfFile" class="file-button">Choose File</label>
+                    </div>
+                </div>
+                <button type="submit" class="submit-button"><i class="fas fa-cloud-upload-alt"></i> Upload & Process</button>
+            </form>
+            <div id="uploadStatus"></div>
+        </div>
+
+        <div class="query-section">
+            <h2><i class="fas fa-search"></i> Ask a Question</h2>
+            <input type="text" id="queryInput" placeholder="e.g., How do I adjust the instrument panel light brightness?">
+            <button id="searchButton"><i class="fas fa-search"></i> Search</button>
+            <div class="loading" id="loadingIndicator">
+                <p>Searching for answers...</p>
+            </div>
+        </div>
+
+        <div class="results-section" id="resultsSection" style="display: none;">
+            <div class="answer" id="answerBox">
+                <h3><i class="fas fa-lightbulb"></i> Answer</h3>
+                <p id="answerText"></p>
+            </div>
+            
+            <h3><i class="fas fa-book-open"></i> Retrieved Passages</h3>
+            <div id="resultsContainer"></div>
+        </div>
+    </div>
+
+    <script src="js/script.js"></script>
+</body>
+</html> 

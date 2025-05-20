@@ -7,17 +7,37 @@ if sys.platform == 'darwin':
     multiprocessing.set_executable(sys.executable)
 
 from fastapi import FastAPI, HTTPException, UploadFile, File
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import os
 from document_processor import process_pdf
 from embedding_pipeline import process_json_for_embeddings, get_pending_documents
-from embeddings import get_embedding_for_query
+from embeddings import get_embedding_for_query, client as openai_client
 from chroma_store import search_similar
 from typing import List, Optional
 
 # Initialize FastAPI application
 app = FastAPI(title="Car Manual RAG System")
+
+# Add CORS middleware to allow frontend access
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins in development
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods
+    allow_headers=["*"],  # Allows all headers
+)
+
+# Create static directory if it doesn't exist
+os.makedirs("static", exist_ok=True)
+
+# Mount the static files directory
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Define the fine-tuned model ID
+FINE_TUNED_MODEL = "ft:gpt-3.5-turbo-0125:ucla:car-llm:BXkG9H4N"
 
 # Pydantic model for the response of the PDF processing endpoint.
 class ProcessingResponse(BaseModel):
@@ -40,6 +60,7 @@ class EmbeddingResponse(BaseModel):
 class SearchQuery(BaseModel):
     query: str
     top_k: Optional[int] = 3 # Default to top 3 results if not specified.
+    response_format: Optional[str] = None # Can be "json" to get JSON response
 
 # Endpoint to process an uploaded PDF file.
 @app.post("/process-pdf", response_model=ProcessingResponse)
@@ -121,12 +142,13 @@ async def generate_embeddings_endpoint(json_file: str):
         # Catch any exceptions and return a 500 error.
         raise HTTPException(status_code=500, detail=str(e))
 
-# Endpoint to perform a semantic search based on a query.
+# Endpoint to perform a semantic search and generate answer using fine-tuned model
 @app.post("/search")
 async def search_endpoint(query: SearchQuery):
     """
     Performs a semantic search using the query provided in the request body.
-    It generates an embedding for the query and searches for similar text chunks in ChromaDB.
+    It generates an embedding for the query, searches for similar text chunks in ChromaDB,
+    and then uses the fine-tuned model to generate a concise answer.
     """
     try:
         # Generate embedding for the user's query.
@@ -140,24 +162,77 @@ async def search_endpoint(query: SearchQuery):
         output_lines.append(f"Query: \"{query.query}\"")
         output_lines.append(f"Found {len(results)} results:")
         
+        # Extract context from search results
+        context = ""
+        formatted_results = []
+        
         if results:
             for i, result in enumerate(results):
-                output_lines.append(f"--- Result {i+1} ---")
                 # Handle newlines in text content for better readability.
                 text_content = str(result.get('text', 'N/A')).replace('\n', '\n  ')
-                output_lines.append(f"  Text: {text_content}")
                 similarity_score = result.get('similarity')
+                metadata = result.get('metadata', {})
+                
+                # Format for plain text output
+                output_lines.append(f"--- Result {i+1} ---")
+                output_lines.append(f"  Text: {text_content}")
                 if similarity_score is not None:
                     output_lines.append(f"  Similarity: {similarity_score:.4f}")
                 else:
-                    output_lines.append(f"  Similarity: N/A") # Should ideally always have a score
-                output_lines.append(f"  Metadata: {result.get('metadata', {})}")
+                    output_lines.append(f"  Similarity: N/A")
+                output_lines.append(f"  Metadata: {metadata}")
                 output_lines.append("-" * 20)
+                
+                # Store for JSON response
+                formatted_results.append({
+                    "text": text_content,
+                    "similarity": similarity_score,
+                    "metadata": metadata
+                })
+                
+                # Add to context for the fine-tuned model
+                context += text_content + "\n\n"
         else:
             output_lines.append("No results found.")
         
-        # Return the formatted results as a plain text response.
-        return PlainTextResponse("\n".join(output_lines))
+        # Generate answer using the fine-tuned model
+        answer = "No relevant information found to answer your query."
+        error_message = None
+        
+        if context:
+            try:
+                # Use fine-tuned model to generate a concise answer
+                response = openai_client.chat.completions.create(
+                    model=FINE_TUNED_MODEL,
+                    messages=[
+                        {"role": "system", "content": "You are a helpful assistant specializing in car manuals. Provide concise and direct answers based on the given context."},
+                        {"role": "user", "content": f"Context: {context}\n\nQuestion: {query.query}"}
+                    ],
+                    temperature=0.2,  # Lower temperature for more focused answers
+                    max_tokens=200    # Limit response length for conciseness
+                )
+                answer = response.choices[0].message.content
+                
+                # Add the answer to the output
+                output_lines.append("\nGenerated Answer:")
+                output_lines.append(answer)
+            except Exception as e:
+                error_message = str(e)
+                output_lines.append(f"\nError generating answer: {error_message}")
+        
+        # Check if the client wants JSON
+        accept_header = query.response_format if hasattr(query, 'response_format') else None
+        
+        if accept_header == "json":
+            return JSONResponse({
+                "query": query.query,
+                "answer": answer,
+                "results": formatted_results,
+                "error": error_message
+            })
+        else:
+            # Return the formatted results as a plain text response.
+            return PlainTextResponse("\n".join(output_lines))
         
     except Exception as e:
         # Catch any exceptions and return a 500 error.
@@ -170,6 +245,11 @@ async def health_check():
     A simple health check endpoint that returns the server status.
     """
     return {"status": "healthy", "version": "1.0.0"}
+
+# Root endpoint to redirect to our UI
+@app.get("/")
+async def root():
+    return RedirectResponse(url="/static/index.html")
 
 # Entry point for running the FastAPI application with Uvicorn.
 if __name__ == "__main__":
