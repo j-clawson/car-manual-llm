@@ -32,17 +32,10 @@ def scrape_warning_lights(url):
             # Remove numbering if present
             symbol_name = re.sub(r'^\d+\.\s+', '', symbol_name)
             
-            # Find the next paragraph for meaning
-            meaning = ""
-            next_elem = section.find_next(['p', 'div'])
-            if next_elem:
-                meaning = next_elem.get_text().strip()
-                # Clean up the meaning text
-                meaning = re.sub(r'Click for detailed information.*$', '', meaning, flags=re.MULTILINE)
-                meaning = meaning.strip()
-            
-            # Find associated image - specifically look for images in wp-content/uploads
+            # Find associated image and meaning
             image_url = ""
+            meaning = ""
+            
             # First try to find images in the content area
             content_div = section.find_parent('div', class_='entry-content')
             if content_div:
@@ -52,6 +45,16 @@ def scrape_warning_lights(url):
                     src = img.get('src', '')
                     if src and '/wp-content/uploads/' in src:
                         image_url = src
+                        # Find the meaning in the paragraph that follows the image
+                        # Look for the next paragraph that contains the actual meaning
+                        next_p = img.find_next('p')
+                        while next_p:
+                            text = next_p.get_text().strip()
+                            # Skip paragraphs that are just the symbol name or empty
+                            if text and text != symbol_name and not text.startswith('Click for detailed information'):
+                                meaning = text
+                                break
+                            next_p = next_p.find_next('p')
                         break
             
             # If no image found in content area, try to find any image in wp-content/uploads
@@ -59,6 +62,15 @@ def scrape_warning_lights(url):
                 img = section.find_next('img', src=re.compile(r'/wp-content/uploads/'))
                 if img and 'src' in img.attrs:
                     image_url = img['src']
+                    # Find the meaning in the paragraph that follows the image
+                    next_p = img.find_next('p')
+                    while next_p:
+                        text = next_p.get_text().strip()
+                        # Skip paragraphs that are just the symbol name or empty
+                        if text and text != symbol_name and not text.startswith('Click for detailed information'):
+                            meaning = text
+                            break
+                        next_p = next_p.find_next('p')
             
             # Clean up the image URL
             if image_url:
@@ -73,6 +85,13 @@ def scrape_warning_lights(url):
                 # Ensure it ends with .webp
                 if not image_url.endswith('.webp'):
                     image_url = image_url + '.webp'
+            
+            # Clean up the meaning
+            if meaning:
+                # Remove any "Click for detailed information" text
+                meaning = re.sub(r'Click for detailed information.*$', '', meaning, flags=re.MULTILINE)
+                # Remove any leading/trailing whitespace
+                meaning = meaning.strip()
             
             # Add data to lists
             symbol_names.append(symbol_name)
