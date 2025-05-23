@@ -12,3 +12,7 @@ numpy>=1.24.3,<2.0.0
 PyPDF2==3.0.1
 
 # httpx will be installed by openai or other http clients 
+
+requests==2.31.0
+beautifulsoup4==4.12.2
+pandas==2.1.4 
