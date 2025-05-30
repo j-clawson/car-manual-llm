@@ -42,7 +42,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Validate that a file was selected
         if (!file) {
-            showStatus('error', 'Please select a PDF file');
+            showToast('Please select a PDF file', 'error');
             return;
         }
         
@@ -51,7 +51,7 @@ document.addEventListener('DOMContentLoaded', function() {
         formData.append('file', file);
         
         // Show upload in progress message
-        showStatus('progress', 'Uploading and processing...');
+        showToast('Uploading and Processing...', 'progress');
         
         try {
             // Step 1: Upload and process the PDF
@@ -69,7 +69,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (parts.length > 0) {
                     jsonFile = parts[parts.length - 1];
                 }
-                showStatus('progress', 'File processed successfully! Generating embeddings...');
                 
                 // Step 2: Generate embeddings for the processed file
                 const embedResponse = await fetch(`${apiUrl}/generate-embeddings/${encodeURIComponent(jsonFile)}`, {
@@ -80,11 +79,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 if (embedResult.success) {
                     // Show success message with embedding count
-                    showStatus('success', `
-                        File processed and indexed successfully!
-                        Embeddings created: ${embedResult.num_embeddings}
-                        You can now ask questions about this manual.
-                    `);
+                    showToast(`File processed! ${embedResult.num_embeddings} embeddings created.`, 'success');
+                    uploadStatus.innerHTML = ''; // Clear status message
+                    uploadStatus.style.opacity = '1'; // Reset opacity for next message
                     
                     // Scroll to query section
                     const querySection = document.querySelector('.query-section');
@@ -96,11 +93,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                 } else {
                     // Show embedding error
-                    showStatus('error', 'Error generating embeddings');
+                    showToast('Error generating embeddings', 'error');
                 }
             } else {
                 // Show processing error
-                showStatus('error', result.message);
+                showToast(result.message, 'error');
             }
         } catch (error) {
             // Handle any exceptions that occurred during the process
@@ -110,29 +107,47 @@ document.addEventListener('DOMContentLoaded', function() {
             } else if (typeof error === 'string') {
                 errorMessage = error;
             }
-            showStatus('error', errorMessage);
+            showToast(errorMessage, 'error');
         }
     });
     
     // Helper function to show status messages
-    function showStatus(type, message) {
-        const color = type === 'success' ? 'green' : type === 'error' ? 'red' : 'black';
+    function showToast(message, type = 'progress') {
+        const toastContainer = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
         
-        const messageLines = message.trim().split('\n');
-        const formattedMessage = messageLines.map(line => `<p style="color: ${color};">${line.trim()}</p>`).join('');
-        
-        uploadStatus.innerHTML = formattedMessage;
-        
-        // Clear status after some time for success messages
-        if (type === 'success') {
-            setTimeout(() => {
-                // Fade out effect
-                uploadStatus.style.opacity = '0.5';
-                setTimeout(() => {
-                    uploadStatus.style.opacity = '1';
-                }, 300);
-            }, 5000);
+        // Create icon element based on type
+        const icon = document.createElement('i');
+        switch(type) {
+            case 'success':
+                icon.className = 'fas fa-check';
+                break;
+            case 'error':
+                icon.className = 'fas fa-exclamation-triangle';
+                break;
+            case 'progress':
+                icon.className = 'fas fa-circle-notch fa-spin';
+                break;
         }
+        
+        // Create text span
+        const text = document.createElement('span');
+        text.textContent = message;
+        
+        // Add elements to toast
+        toast.appendChild(icon);
+        toast.appendChild(text);
+        toastContainer.appendChild(toast);
+
+        // Show the toast
+        setTimeout(() => toast.classList.add('show'), 10);
+
+        // Remove toast after 4 seconds
+        setTimeout(() => {
+            toast.classList.remove('show');
+            setTimeout(() => toast.remove(), 300);
+        }, 4000);
     }
     
     // Get references to DOM elements for the search functionality
@@ -245,4 +260,42 @@ document.addEventListener('DOMContentLoaded', function() {
     setTimeout(() => {
         document.body.classList.add('transitions-enabled');
     }, 300);
+
+    const placeholderQuestions = [
+        "How do I adjust the instrument panel light brightness?",
+        "What does the check engine light mean?",
+        "How to change the oil filter?",
+        "Where is the spare tire located?",
+        "How do I reset the maintenance light?"
+    ];
+
+    const input = document.getElementById("queryInput");
+    let questionIndex = 0;
+    let charIndex = 0;
+    let typing = true;
+
+    function typePlaceholder() {
+        const currentQuestion = placeholderQuestions[questionIndex];
+
+        if (typing) {
+            if (charIndex <= currentQuestion.length) {
+                input.placeholder = currentQuestion.substring(0, charIndex++);
+                setTimeout(typePlaceholder, 80);
+            } else {
+                typing = false;
+                setTimeout(typePlaceholder, 2000); // pause before deleting
+            }
+        } else {
+            if (charIndex > 0) {
+                input.placeholder = currentQuestion.substring(0, --charIndex);
+                setTimeout(typePlaceholder, 40);
+            } else {
+                typing = true;
+                questionIndex = (questionIndex + 1) % placeholderQuestions.length;
+                setTimeout(typePlaceholder, 500);
+            }
+        }
+    }
+
+    typePlaceholder();
 });
