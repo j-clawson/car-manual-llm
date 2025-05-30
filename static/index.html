@@ -14,42 +14,49 @@
     </header>
 
     <div class="container">
-        <div class="section-row">
-            <div class="upload-section">
-                <h2><i class="fas fa-file-upload"></i> Upload a Car Manual</h2>
-                <form id="uploadForm">
-                    <div class="file-input-container">
-                        <input type="file" id="pdfFile" accept=".pdf" class="hidden-file-input" required>
-                        <div class="custom-file-input">
-                            <span id="fileName">No file selected</span>
-                            <label for="pdfFile" class="file-button">Choose File</label>
-                        </div>
+        <div class="upload-section">
+            <h2><i class="fas fa-file-upload"></i> Upload File (PDF/Image)</h2>
+            <form id="uploadForm">
+                <div class="file-input-container">
+                    <input type="file" id="fileUploadInput" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp" class="hidden-file-input" required>
+                    <div class="custom-file-input">
+                        <span id="fileName">No file selected</span>
+                        <label for="fileUploadInput" class="file-button">Choose File</label>
                     </div>
-                    <button type="submit" class="submit-button"><i class="fas fa-cloud-upload-alt"></i> Upload & Process</button>
-                </form>
-                <div id="uploadStatus"></div>
-            </div>
-
-            <div class="query-section">
-                <h2><i class="fas fa-search"></i> Ask a Question</h2>
-                <input type="text" id="queryInput" placeholder="e.g., How do I adjust the instrument panel light brightness?">
-                <button id="searchButton"><i class="fas fa-search"></i> Search</button>
-                <div class="loading" id="loadingIndicator">
-                    <p>Searching for answers...</p>
                 </div>
+                <button type="submit" class="submit-button"><i class="fas fa-cloud-upload-alt"></i> Upload & Process</button>
+            </form>
+            <div id="uploadStatus"></div>
+        </div>
+
+        <div id="imageDescriptionSection" style="display: none;">
+            <h3><i class="fas fa-image"></i> Describe Uploaded Image</h3>
+            <div class="image-preview-container">
+                <img id="uploadedImagePreview" src="#" alt="Uploaded Image Preview" style="max-width: 100%; max-height: 300px; display: none;">
             </div>
+            <p><strong>File:</strong> <span id="imageToDescribeName"></span></p>
+            <textarea id="imagePromptInput" placeholder="Enter your prompt for image description..."></textarea>
+            <button id="submitImageDescriptionButton" class="submit-button"><i class="fas fa-comment-dots"></i> Get Description</button>
+        </div>
+
+        <div class="query-section">
+            <h2><i class="fas fa-search"></i> Ask a Question (about PDFs)</h2>
+            <input type="text" id="queryInput" placeholder="e.g., How do I adjust the instrument panel light brightness?">
+            <button id="searchButton"><i class="fas fa-search"></i> Search</button>
+            <div class="loading" id="loadingIndicator" style="display:none;">
+                <p>Searching for answers...</p>
+            </div>
+        </div>
+    </div>
+        
+    <div class="results-section" id="resultsSection" style="display: none;">
+        <div class="answer" id="answerBox">
+            <h3><i class="fas fa-lightbulb"></i> Answer</h3>
+            <p id="answerText"></p>
         </div>
         
-
-        <div class="results-section" id="resultsSection" style="display: none;">
-            <div class="answer" id="answerBox">
-                <h3><i class="fas fa-lightbulb"></i> Answer</h3>
-                <p id="answerText"></p>
-            </div>
-            
-            <h3><i class="fas fa-book-open"></i> Retrieved Passages</h3>
-            <div id="resultsContainer"></div>
-        </div>
+        <h3><i class="fas fa-book-open"></i> Retrieved Passages</h3>
+        <div id="resultsContainer"></div>
     </div>
 
     <script src="js/script.js"></script>

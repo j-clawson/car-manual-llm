@@ -3,12 +3,16 @@ import json
 import os
 from typing import List, Dict
 from embeddings import create_embeddings # Function to create embeddings from text.
-from chroma_store import store_embeddings # Function to store embeddings in ChromaDB.
+from chroma_store import store_embeddings, DEFAULT_COLLECTION_NAME # Function to store embeddings in ChromaDB and get default name.
 from datetime import datetime # For timestamping metadata.
 
-def process_json_for_embeddings(json_path: str) -> Dict:
+def process_json_for_embeddings(json_path: str, collection_name: str) -> Dict:
     """Processes a JSON file containing text chunks, generates embeddings for these chunks,
-    and stores them in a ChromaDB vector store.
+    and stores them in the specified ChromaDB vector store collection.
+
+    Args:
+        json_path (str): Path to the JSON file containing text chunks.
+        collection_name (str): Name of the ChromaDB collection to store embeddings in.
 
     Returns:
         A dictionary summarizing the embedding process, including input/output file paths,
@@ -24,27 +28,57 @@ def process_json_for_embeddings(json_path: str) -> Dict:
     metadata = [{
         'source': data['source_pdf'], 
         'chunk_index': i,
+        'original_text_id': chunk.get('id', f'chunk_{i}'), # Use original chunk ID if available, else generate
         'timestamp': datetime.now().isoformat()
-    } for i in range(len(texts))]
+    } for i, chunk in enumerate(data['chunks'])] # Iterate with chunk for original_text_id
     
+    # Generate unique IDs for ChromaDB for each chunk
+    # It's good practice for these to be stable and unique.
+    # Using a combination of source PDF and chunk index or original chunk ID.
+    chroma_ids = [
+        f"pdf_{os.path.basename(data['source_pdf'])}_{meta['original_text_id']}_{i}" 
+        for i, meta in enumerate(metadata)
+    ]
+
     # Generate embeddings for the extracted texts.
-    embeddings = create_embeddings(texts)
+    embeddings_data = create_embeddings(texts)
+
+    if not embeddings_data or len(texts) != len(embeddings_data) or len(texts) != len(chroma_ids) or len(texts) != len(metadata):
+        # Handle error: mismatch in list lengths or no embeddings generated
+        error_msg = "Mismatch in data lengths or no embeddings generated. Cannot store."
+        print(f"Error in process_json_for_embeddings: {error_msg}")
+        # Optionally, return an error structure or raise an exception
+        return {
+            "input_file": json_path,
+            "output_file": None, 
+            "num_embeddings": 0,
+            "embedding_dimension": 0,
+            "message": error_msg,
+            "error": True
+        }
+
     # Store the generated embeddings along with their texts and metadata in ChromaDB.
-    store_embeddings(texts, embeddings, metadata) # Result of store_embeddings not used, can be direct call.
+    store_embeddings(
+        texts=texts, 
+        embeddings=embeddings_data,
+        ids=chroma_ids, 
+        collection_name=collection_name,
+        metadata=metadata
+    )
     
     output_file_basename = os.path.basename(json_path).split('.')[0]
     output_file = os.path.join('embedded_data', f"{output_file_basename}_embedded.json")
     os.makedirs('embedded_data', exist_ok=True) # Ensure the directory exists.
     
     with open(output_file, 'w') as f:
-        json.dump({"status": "embeddings_generated", "source_json": json_path}, f)
+        json.dump({"status": "embeddings_generated", "source_json": json_path, "collection": collection_name}, f)
 
     return {
         "input_file": json_path,
         "output_file": output_file, 
-        "num_embeddings": len(embeddings) if embeddings else 0,
-        "embedding_dimension": len(embeddings[0]) if embeddings and embeddings[0] else 0,
-        "message": "Successfully generated and stored embeddings in ChromaDB"
+        "num_embeddings": len(embeddings_data) if embeddings_data else 0,
+        "embedding_dimension": len(embeddings_data[0]) if embeddings_data and embeddings_data[0] else 0,
+        "message": f"Successfully generated and stored embeddings in ChromaDB collection '{collection_name}'"
     }
 
 def get_pending_documents() -> List[str]:
