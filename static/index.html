@@ -15,7 +15,7 @@
 
     <div class="container">
         <div class="upload-section">
-            <h2><i class="fas fa-file-upload"></i> Upload File (PDF/Image)</h2>
+            <h2><i class="fas fa-file-upload"></i> Upload File (Car Manual PDF or Dashboard Icon Image)</h2>
             <form id="uploadForm">
                 <div class="file-input-container">
                     <input type="file" id="fileUploadInput" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp" class="hidden-file-input" required>
@@ -43,8 +43,8 @@
             </div>
         </div>
 
-        <div class="query-section">
-            <h2><i class="fas fa-search"></i> Ask a Question (About PDFs)</h2>
+        <div class="query-section" style="display: none;">
+            <h2><i class="fas fa-search"></i> Ask a Question</h2>
             <input type="text" id="queryInput" placeholder="e.g., How do I adjust the instrument panel light brightness?">
             <button id="searchButton"><i class="fas fa-search"></i> Search</button>
             <div class="loading" id="loadingIndicator" style="display:none;">
@@ -58,8 +58,10 @@
                 <p id="answerText"></p>
             </div>
             
-            <h3><i class="fas fa-book-open"></i> Retrieved Passages</h3>
-            <div id="resultsContainer"></div>
+            <div id="passagesSection">
+                <h3><i class="fas fa-book-open"></i> Retrieved Passages</h3>
+                <div id="resultsContainer"></div>
+            </div>
         </div>
     </div>
 

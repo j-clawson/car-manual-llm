@@ -125,6 +125,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 fileNameDisplay.textContent = name;
                 fileNameDisplay.title = name;
                 fileNameDisplay.classList.add('file-selected');
+                
+                // Hide results section when new file is selected
+                resultsSection.style.display = 'none';
+                
+                // Hide both sections initially
+                const querySection = document.querySelector('.query-section');
+                const imageDescriptionSection = document.getElementById('imageDescriptionSection');
+                if (querySection) querySection.style.display = 'none';
+                if (imageDescriptionSection) imageDescriptionSection.style.display = 'none';
             } else {
                 fileNameDisplay.textContent = 'No file selected';
                 fileNameDisplay.title = '';
@@ -149,6 +158,12 @@ document.addEventListener('DOMContentLoaded', function() {
             const fName = file.name.toLowerCase();
             const isPdf = fName.endsWith('.pdf');
             const isImage = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'].some(ext => fName.endsWith(ext));
+
+            // Hide both sections initially
+            const querySection = document.querySelector('.query-section');
+            const imageDescriptionSection = document.getElementById('imageDescriptionSection');
+            if (querySection) querySection.style.display = 'none';
+            if (imageDescriptionSection) imageDescriptionSection.style.display = 'none';
 
             if (isPdf) {
                 showToast('Uploading and processing PDF...', 'progress');
@@ -177,6 +192,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
                         if (embedResult.success) {
                             showToast(`PDF processed and indexed! Embeddings: ${embedResult.num_embeddings}. You can now ask questions.`, 'success');
+                            // Show the query section
+                            if (querySection) {
+                                querySection.style.display = 'block';
+                                querySection.style.opacity = '0';
+                                setTimeout(() => {
+                                    querySection.style.transition = 'opacity 0.3s ease';
+                                    querySection.style.opacity = '1';
+                                    querySection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                                }, 10);
+                            }
                             scrollToQuerySection();
                         } else {
                             showToast(embedResult.message || 'Error generating PDF embeddings', 'error');
@@ -242,10 +267,12 @@ document.addEventListener('DOMContentLoaded', function() {
             showToast(`Requesting description for ${originalImageName || imageFileUuid}...`, 'progress');
             loadingIndicator.style.display = 'block'; // Show main search loading
             resultsSection.style.display = 'none';
-            if(imageDescriptionSection) imageDescriptionSection.style.display = 'none'; // Hide prompt section
-            if(uploadedImagePreview) {
-                uploadedImagePreview.style.display = 'none'; // Hide preview after submit
-                uploadedImagePreview.src = ''; // Clear src
+            
+            // Keep image description section visible and show loading state
+            if(imageDescriptionSection) {
+                imageDescriptionSection.classList.add('loading-state');
+                submitImageDescriptionButton.disabled = true;
+                submitImageDescriptionButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Getting Description...';
             }
 
             try {
@@ -259,14 +286,28 @@ document.addEventListener('DOMContentLoaded', function() {
                 const describeResult = await describeResponse.json();
                 loadingIndicator.style.display = 'none';
 
+                // Reset image description section state
+                if(imageDescriptionSection) {
+                    imageDescriptionSection.classList.remove('loading-state');
+                    submitImageDescriptionButton.disabled = false;
+                    submitImageDescriptionButton.innerHTML = '<i class="fas fa-comment-dots"></i> Get Description';
+                }
+
                 if (describeResult.success) {
                     showToast(`Description received for ${originalImageName || describeResult.filename}.`, 'success');
                     answerText.textContent = describeResult.description;
-                    resultsContainer.innerHTML = `<p><strong>Prompt used:</strong> ${describeResult.prompt}</p>`; 
+                    
+                    // For image descriptions, only show the answer without passages
+                    resultsContainer.innerHTML = '';
                     if (describeResult.matched_symbol_info) {
                         resultsContainer.innerHTML += `<p><strong>Matched Symbol:</strong> ${describeResult.matched_symbol_info.name}</p>`;
                         resultsContainer.innerHTML += `<p><strong>Symbol Meaning:</strong> ${describeResult.matched_symbol_info.meaning}</p>`;
                     }
+                    
+                    // Hide passages section for image descriptions
+                    const passagesSection = document.getElementById('passagesSection');
+                    if (passagesSection) passagesSection.style.display = 'none';
+                    
                     resultsSection.style.opacity = '0';
                     resultsSection.style.display = 'block';
                     setTimeout(() => {
@@ -279,6 +320,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             } catch (error) {
                 loadingIndicator.style.display = 'none';
+                // Reset image description section state on error
+                if(imageDescriptionSection) {
+                    imageDescriptionSection.classList.remove('loading-state');
+                    submitImageDescriptionButton.disabled = false;
+                    submitImageDescriptionButton.innerHTML = '<i class="fas fa-comment-dots"></i> Get Description';
+                }
                 handleUploadError(error);
             }
         });
@@ -297,8 +344,14 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        // Show loading indicator and hide previous results
-        loadingIndicator.style.display = 'block';
+        // Show loading state in query section
+        const querySection = document.querySelector('.query-section');
+        querySection.classList.add('loading-state');
+        searchButton.disabled = true;
+        searchButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Searching...';
+        queryInput.disabled = true;
+        
+        // Hide previous results
         resultsSection.style.display = 'none';
         
         try {
@@ -322,14 +375,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const result = await response.json();
             
-            // Hide loading indicator
-            loadingIndicator.style.display = 'none';
+            // Reset loading state
+            querySection.classList.remove('loading-state');
+            searchButton.disabled = false;
+            searchButton.innerHTML = '<i class="fas fa-search"></i> Search';
+            queryInput.disabled = false;
             
             // Display the AI-generated answer
             answerText.textContent = result.answer;
             
             // Clear any previous search results
             resultsContainer.innerHTML = '';
+            
+            // Show passages section for PDF search results
+            const passagesSection = document.getElementById('passagesSection');
+            if (passagesSection) passagesSection.style.display = 'block';
             
             // Create and append HTML elements for each search result
             result.results.forEach((item, index) => {
@@ -366,8 +426,13 @@ document.addEventListener('DOMContentLoaded', function() {
             }, 10);
             
         } catch (error) {
+            // Reset loading state on error
+            querySection.classList.remove('loading-state');
+            searchButton.disabled = false;
+            searchButton.innerHTML = '<i class="fas fa-search"></i> Search';
+            queryInput.disabled = false;
+            
             // Handle any errors that occurred during search
-            loadingIndicator.style.display = 'none';
             let errorMessage = 'Unknown error';
             if (error instanceof Error) {
                 errorMessage = error.message;
