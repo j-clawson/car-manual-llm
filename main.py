@@ -66,13 +66,19 @@ SIMILARITY_THRESHOLD = 0.70
 # Define the fine-tuned model ID
 FINE_TUNED_MODEL = "ft:gpt-3.5-turbo-0125:ucla:car-llm:BXkG9H4N"
 
-# Pydantic model for the response of the PDF processing endpoint.
-class ProcessingResponse(BaseModel):
+# Pydantic model for individual PDF processing result
+class PDFProcessingResult(BaseModel):
     success: bool
     output_file: str
     metadata: dict
     message: str
-    next_embedding_command: Optional[str] = None
+    original_filename: str
+
+# Pydantic model for the response of the PDF processing endpoint.
+class ProcessingResponse(BaseModel):
+    success: bool
+    results: List[PDFProcessingResult]
+    message: str
 
 # Pydantic model for the response of the embedding generation endpoint.
 class EmbeddingResponse(BaseModel):
@@ -110,56 +116,74 @@ class ImageDescriptionResponse(BaseModel):
     description: str
     error: Optional[str] = None
 
-# Endpoint to process an uploaded PDF file.
+# Endpoint to process uploaded PDF files.
 @app.post("/process-pdf", response_model=ProcessingResponse)
-async def process_pdf_endpoint(request: Request, file: UploadFile = File(...)):
+async def process_pdf_endpoint(request: Request, files: List[UploadFile] = File(...)):
     """
-    Handles PDF file uploads, saves the file, and processes it to extract text and metadata.
-    Also provides a suggested curl command for the next step (embedding generation).
+    Handles multiple PDF file uploads, saves the files, and processes them to extract text and metadata.
     """
+    results = []
+    total_files = len(files)
+    successful_files = 0
+
     try:
-        # Validate file type to ensure it's a PDF.
-        if not file.filename.lower().endswith('.pdf'):
-            logger.warning(f"PDF processing attempt with non-PDF file: {file.filename}")
-            raise HTTPException(status_code=400, detail="Only PDF files are accepted")
-        
-        # Create 'pdfs' directory if it doesn't exist to store uploaded PDFs.
+        # Create 'pdfs' directory if it doesn't exist
         os.makedirs(config.PDF_UPLOAD_DIR, exist_ok=True)
         
-        # Save uploaded file to the 'pdfs' directory.
-        file_path = os.path.join(config.PDF_UPLOAD_DIR, file.filename)
-        with open(file_path, "wb") as buffer:
-            content = await file.read() # Read file content asynchronously.
-            buffer.write(content)
-        logger.info(f"PDF file '{file.filename}' saved to '{file_path}'")
-        
-        # Process the PDF using the document_processor module.
-        result = process_pdf(file_path) # This returns a dict with "output_file"
-        
-        output_json_path = result["output_file"] # e.g., "processed_data/filename.json"
-        output_json_filename = os.path.basename(output_json_path) # e.g., "filename.json"
-        
-        # URL-encode the filename for the next command
-        url_encoded_filename = urllib.parse.quote(output_json_filename)
-        
-        # Construct the next command
-        # Use request.url_for for dynamic URL generation
-        base_url = str(request.base_url).rstrip('/')
-        next_command = f"curl -X POST {base_url}/generate-embeddings/{url_encoded_filename}"
+        for file in files:
+            try:
+                # Validate file type
+                if not file.filename.lower().endswith('.pdf'):
+                    results.append(PDFProcessingResult(
+                        success=False,
+                        output_file="",
+                        metadata={},
+                        message="Not a PDF file",
+                        original_filename=file.filename
+                    ))
+                    continue
+
+                # Save uploaded file
+                file_path = os.path.join(config.PDF_UPLOAD_DIR, file.filename)
+                with open(file_path, "wb") as buffer:
+                    content = await file.read()
+                    buffer.write(content)
+                logger.info(f"PDF file '{file.filename}' saved to '{file_path}'")
+
+                # Process the PDF
+                result = process_pdf(file_path)
+                successful_files += 1
+                
+                results.append(PDFProcessingResult(
+                    success=True,
+                    output_file=result["output_file"],
+                    metadata=result.get("metadata", {}),
+                    message="Successfully processed",
+                    original_filename=file.filename
+                ))
+
+            except Exception as e:
+                logger.error(f"Error processing PDF '{file.filename}': {e}", exc_info=True)
+                results.append(PDFProcessingResult(
+                    success=False,
+                    output_file="",
+                    metadata={},
+                    message="Processing failed",
+                    original_filename=file.filename
+                ))
+
+        overall_success = successful_files > 0
+        overall_message = f"Successfully processed {successful_files} out of {total_files} PDF(s)"
         
         return ProcessingResponse(
-            success=True,
-            output_file=output_json_path,
-            metadata=result.get("metadata", {}), # Use .get for safety
-            message=f"Successfully processed PDF and saved to {output_json_path}",
-            next_embedding_command=next_command
+            success=overall_success,
+            results=results,
+            message=overall_message
         )
-        
-    except HTTPException as http_ex:
-        raise http_ex
+
     except Exception as e:
-        logger.error(f"Error processing PDF '{file.filename}': {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"An unexpected error occurred while processing the PDF: {type(e).__name__}")
+        logger.error(f"Error in bulk PDF processing: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred while processing PDFs: {type(e).__name__}")
 
 # Endpoint to generate embeddings for a processed JSON file.
 @app.post("/generate-embeddings/{json_file}", response_model=EmbeddingResponse)

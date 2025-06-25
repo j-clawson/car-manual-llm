@@ -6,6 +6,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // API endpoint URL - can be changed if hosting elsewhere
     const apiUrl = 'http://localhost:8000';
     
+    // Declare selectedFiles variable
+    let selectedFiles = [];
+    
     // Get references to DOM elements for the upload form
     const uploadForm = document.getElementById('uploadForm');
     const uploadStatus = document.getElementById('uploadStatus');
@@ -26,6 +29,24 @@ document.addEventListener('DOMContentLoaded', function() {
     const resultsSection = document.getElementById('resultsSection');
     const resultsContainer = document.getElementById('resultsContainer');
     const answerText = document.getElementById('answerText');
+    
+    // Add UI elements for PDF processing results
+    const pdfProcessingOutput = document.createElement('div');
+    pdfProcessingOutput.id = 'pdfProcessingOutput';
+    pdfProcessingOutput.className = 'pdf-processing-output';
+    document.querySelector('.upload-section').appendChild(pdfProcessingOutput);
+
+    const pdfResultsList = document.createElement('ul');
+    pdfResultsList.id = 'pdfResultsList';
+    pdfProcessingOutput.appendChild(pdfResultsList);
+
+    const pdfOverallMessage = document.createElement('p');
+    pdfOverallMessage.id = 'pdfOverallMessage';
+    pdfProcessingOutput.appendChild(pdfOverallMessage);
+
+    const pdfNextSteps = document.createElement('p');
+    pdfNextSteps.id = 'pdfNextSteps';
+    pdfProcessingOutput.appendChild(pdfNextSteps);
     
     // Moved Helper Functions Upwards (showToast, handleUploadError, showImageDescriptionPrompt, scrollToQuerySection)
     function showToast(message, type = 'progress') {
@@ -93,7 +114,11 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         if (imageDescriptionSection && imageToDescribeName && imagePromptInput && uploadedImagePreview) {
-            imageToDescribeName.textContent = originalImageFilename;
+            // Remove or hide the filename display
+            if (imageToDescribeName) {
+                imageToDescribeName.style.display = 'none';
+            }
+            
             imagePromptInput.value = sessionStorage.getItem('defaultImagePrompt') || "Describe any car dashboard warning lights or symbols in this image and explain their meaning.";
             
             if (imagePath) {
@@ -121,9 +146,16 @@ document.addEventListener('DOMContentLoaded', function() {
     if (fileInput) {
         fileInput.addEventListener('change', function() {
             if (fileInput.files && fileInput.files.length > 0) {
-                const name = fileInput.files[0].name;
-                fileNameDisplay.textContent = name;
-                fileNameDisplay.title = name;
+                selectedFiles = Array.from(fileInput.files); // Store the actual File objects
+                // Display all selected filenames or a summary
+                if (selectedFiles.length === 1) {
+                    const name = selectedFiles[0].name;
+                    fileNameDisplay.textContent = name;
+                    fileNameDisplay.title = name;
+                } else {
+                    fileNameDisplay.textContent = `${selectedFiles.length} files selected`;
+                    fileNameDisplay.title = selectedFiles.map(f => f.name).join(', ');
+                }
                 fileNameDisplay.classList.add('file-selected');
                 
                 // Hide results section when new file is selected
@@ -135,6 +167,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (querySection) querySection.style.display = 'none';
                 if (imageDescriptionSection) imageDescriptionSection.style.display = 'none';
             } else {
+                selectedFiles = []; // Clear stored files
                 fileNameDisplay.textContent = 'No file selected';
                 fileNameDisplay.title = '';
                 fileNameDisplay.classList.remove('file-selected');
@@ -146,30 +179,35 @@ document.addEventListener('DOMContentLoaded', function() {
     if (uploadForm) {
         uploadForm.addEventListener('submit', async function(e) {
             e.preventDefault();
-            let file = fileInput.files && fileInput.files.length > 0 ? fileInput.files[0] : null;
-
-            if (!file) {
-                showToast('Please select a PDF or Image file', 'error');
+            
+            if (!selectedFiles || selectedFiles.length === 0) {
+                showToast('Please select one or more files.', 'error');
                 return;
             }
 
-            const formData = new FormData();
-            formData.append('file', file);
-            const fName = file.name.toLowerCase();
-            const isPdf = fName.endsWith('.pdf');
-            const isImage = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'].some(ext => fName.endsWith(ext));
+            const allFiles = selectedFiles;
+            const pdfFiles = allFiles.filter(file => file.name.toLowerCase().endsWith('.pdf'));
+            const imageFiles = allFiles.filter(file => ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'].some(ext => file.name.toLowerCase().endsWith(ext)));
 
-            // Hide both sections initially
+            // Reset UI elements
+            pdfProcessingOutput.style.display = 'none';
+            pdfResultsList.innerHTML = '';
+            pdfOverallMessage.textContent = '';
+            pdfNextSteps.textContent = '';
+            if(imageDescriptionSection) imageDescriptionSection.style.display = 'none';
+            if(uploadedImagePreview) uploadedImagePreview.style.display = 'none';
             const querySection = document.querySelector('.query-section');
-            const imageDescriptionSection = document.getElementById('imageDescriptionSection');
             if (querySection) querySection.style.display = 'none';
-            if (imageDescriptionSection) imageDescriptionSection.style.display = 'none';
+            resultsSection.style.display = 'none';
 
-            if (isPdf) {
-                showToast('Uploading and processing PDF...', 'progress');
+            if (pdfFiles.length > 0) {
+                showToast(`Processing ${pdfFiles.length} PDF(s)...`, 'progress');
+                const formData = new FormData();
+                pdfFiles.forEach(file => {
+                    formData.append('files', file);
+                });
+
                 try {
-                    console.log('Attempting to upload PDF:', file);
-                    console.log('FormData for PDF:', formData.get('file')); // Check what FormData holds
                     const response = await fetch(`${apiUrl}/process-pdf`, {
                         method: 'POST',
                         body: formData
@@ -178,21 +216,45 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (!response.ok) throw new Error(result.detail || `HTTP error! status: ${response.status}`);
 
                     if (result.success) {
-                        let jsonFile = '';
-                        const parts = result.output_file.split('/');
-                        if (parts.length > 0) jsonFile = parts[parts.length - 1];
-                        
-                        showToast('PDF processed! Generating embeddings...', 'progress');
-                        
-                        const embedResponse = await fetch(`${apiUrl}/generate-embeddings/${encodeURIComponent(jsonFile)}`, {
-                            method: 'POST'
-                        });
-                        const embedResult = await embedResponse.json();
-                        if (!embedResponse.ok) throw new Error(embedResult.detail || `HTTP error! status: ${embedResponse.status}`);
+                        let allEmbeddingsSuccessful = true;
+                        let successfulEmbeddingCount = 0;
+                        let totalSuccessfullyProcessed = 0;
 
-                        if (embedResult.success) {
-                            showToast(`PDF processed and indexed! Embeddings: ${embedResult.num_embeddings}. You can now ask questions.`, 'success');
-                            // Show the query section
+                        // Show simplified processing results
+                        pdfProcessingOutput.style.display = 'none'; // Hide the detailed output
+                        pdfResultsList.innerHTML = '';
+                        result.results.forEach(pdfResult => {
+                            if (pdfResult.success) {
+                                showToast(`Processing ${pdfResult.original_filename}...`, 'progress');
+                            }
+                        });
+
+                        // Process embeddings for successful PDFs
+                        if (result.results && result.results.length > 0) {
+                            totalSuccessfullyProcessed = result.results.filter(r => r.success).length;
+
+                            for (const pdfResult of result.results) {
+                                if (pdfResult.success && pdfResult.output_file) {
+                                    try {
+                                        const jsonFile = pdfResult.output_file.split('/').pop();
+                                        const embedResponse = await fetch(`${apiUrl}/generate-embeddings/${encodeURIComponent(jsonFile)}`, {
+                                            method: 'POST'
+                                        });
+                                        const embedResult = await embedResponse.json();
+                                        if (!embedResponse.ok || !embedResult.success) {
+                                            allEmbeddingsSuccessful = false;
+                                        } else {
+                                            successfulEmbeddingCount++;
+                                        }
+                                    } catch (embedError) {
+                                        allEmbeddingsSuccessful = false;
+                                    }
+                                }
+                            }
+                        }
+
+                        if (successfulEmbeddingCount > 0 && successfulEmbeddingCount === totalSuccessfullyProcessed) {
+                            showToast(`Successfully processed ${successfulEmbeddingCount} PDF(s). You can now ask questions.`, 'success');
                             if (querySection) {
                                 querySection.style.display = 'block';
                                 querySection.style.opacity = '0';
@@ -203,17 +265,24 @@ document.addEventListener('DOMContentLoaded', function() {
                                 }, 10);
                             }
                             scrollToQuerySection();
+                        } else if (successfulEmbeddingCount > 0) {
+                            showToast(`${successfulEmbeddingCount} out of ${totalSuccessfullyProcessed} PDFs processed successfully.`, 'warning');
+                            if (querySection) querySection.style.display = 'block';
+                            scrollToQuerySection();
                         } else {
-                            showToast(embedResult.message || 'Error generating PDF embeddings', 'error');
+                            showToast("No PDFs were successfully processed. Please try again.", "error");
                         }
                     } else {
-                        showToast(result.message || 'Error processing PDF', 'error');
+                        showToast(result.message || 'Error processing PDFs', 'error');
                     }
                 } catch (error) {
                     handleUploadError(error, 'PDF processing');
                 }
-            } else if (isImage) {
+            } else if (imageFiles.length === 1) {
                 showToast('Uploading image...', 'progress');
+                const formData = new FormData();
+                formData.append('file', imageFiles[0]);
+                
                 try {
                     const response = await fetch(`${apiUrl}/upload-image`, {
                         method: 'POST',
@@ -236,8 +305,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 } catch (error) {
                     handleUploadError(error, 'Image upload');
                 }
+            } else if (imageFiles.length > 1) {
+                showToast('Please upload only one image at a time.', 'error');
             } else {
-                showToast('Unsupported file. Select PDF or image (png, jpg, etc.).', 'error');
+                showToast('Unsupported file type(s). Please select PDF(s) or a single image file.', 'error');
             }
         });
     }
@@ -298,7 +369,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     answerText.textContent = describeResult.description;
                     
                     // For image descriptions, only show the answer without passages
-                    resultsContainer.innerHTML = '';
+                    if (resultsContainer) {
+                        resultsContainer.innerHTML = '';
+                    }
                     if (describeResult.matched_symbol_info) {
                         resultsContainer.innerHTML += `<p><strong>Matched Symbol:</strong> ${describeResult.matched_symbol_info.name}</p>`;
                         resultsContainer.innerHTML += `<p><strong>Symbol Meaning:</strong> ${describeResult.matched_symbol_info.meaning}</p>`;
@@ -385,34 +458,21 @@ document.addEventListener('DOMContentLoaded', function() {
             answerText.textContent = result.answer;
             
             // Clear any previous search results
-            resultsContainer.innerHTML = '';
+            if (resultsContainer) {
+                resultsContainer.innerHTML = '';
+            }
             
             // Show passages section for PDF search results
             const passagesSection = document.getElementById('passagesSection');
-            if (passagesSection) passagesSection.style.display = 'block';
+            if (passagesSection) passagesSection.style.display = 'none';
             
-            // Create and append HTML elements for each search result
-            result.results.forEach((item, index) => {
-                const resultItem = document.createElement('div');
-                resultItem.className = 'result-item';
-                
-                // Format metadata
-                let metadataHtml = '';
-                if (item.metadata && Object.keys(item.metadata).length > 0) {
-                    const metaEntries = Object.entries(item.metadata)
-                        .map(([key, value]) => `<strong>${key}</strong>: ${value}`)
-                        .join(' | ');
-                    metadataHtml = `<p class="metadata">${metaEntries}</p>`;
-                }
-                
-                resultItem.innerHTML = `
-                    <h4>Passage ${index + 1}</h4>
-                    <p>${item.text.replace(/\n/g, '<br>')}</p>
-                    ${metadataHtml}
-                    <p><strong>Similarity:</strong> ${(item.similarity * 100).toFixed(2)}%</p>
-                `;
-                resultsContainer.appendChild(resultItem);
-            });
+            // Do NOT render any passages
+            // result.results.forEach((item, index) => {
+            //     const resultItem = document.createElement('div');
+            //     resultItem.className = 'result-item';
+            //     // ... code to fill in passage text ...
+            //     resultsContainer.appendChild(resultItem);
+            // });
             
             // Show the results section with fade-in effect
             resultsSection.style.opacity = '0';

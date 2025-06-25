@@ -14,7 +14,8 @@ load_dotenv()
 # The API key is fetched from environment variables (loaded from .env or system env).
 # Ensure OPENAI_API_KEY is set in your .env file or system environment variables for this to work.
 client = OpenAI(
-    api_key=os.getenv("OPENAI_API_KEY")
+    api_key=os.getenv("OPENAI_API_KEY"),
+    base_url="https://api.openai.com/v1"  # Explicitly set the base URL for project-scoped keys
 )
 
 # Default model for embeddings. This can be updated to use other OpenAI embedding models.

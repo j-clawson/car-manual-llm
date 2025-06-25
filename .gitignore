@@ -1,11 +1,60 @@
+# Environment variables
 .env
+
+# Processed data and uploads
+pdfs/*
+processed_data/*
+uploaded_images/*
+logs/*
+
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Docker
+.docker/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Keep .gitkeep files
+!pdfs/.gitkeep
+!processed_data/.gitkeep
+!uploaded_images/.gitkeep
+!logs/.gitkeep
+
+# Additional files
 embedded_data/
-processed_data/
 chroma_db/
 *.sqlite3
-node_modules/
-logs/
-uploaded_images/ 
+node_modules/ 
