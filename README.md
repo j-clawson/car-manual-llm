@@ -1,4 +1,5 @@
 # Car Manual Assistant
+created by James Clawson, Christian Chen, Aryan Gupta and Parnika Chaturvedi @ DataRes UCLA
 
 A Docker-based application that processes car manuals (PDFs) and answers questions about them using AI. The application also supports analyzing car dashboard images for symbol identification.
 
